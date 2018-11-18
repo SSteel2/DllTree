@@ -147,3 +147,52 @@ for i in range(1, number_sections + 1):  # They are numbered starting from 1
     section_header['NumberOfLineNumbers'] = int(dll_file.read(2)[::-1].hex(), 16)
     section_header['Characteristics'] = int(dll_file.read(4)[::-1].hex(), 16)
     section_headers.append(section_header)
+
+# Getting dll information
+# Dll's are located in import table
+# First we need to get the section of import table
+import_table_section = None
+for i in section_headers:
+    if i['VirtualAddress'] <= import_table and i['VirtualAddress'] + i['SizeOfRawData'] > import_table:
+        import_table_section = i
+        break
+# Using section data calculate real address of import table
+import_table_real_address = import_table - import_table_section['VirtualAddress'] + \
+    import_table_section['PointerToRawData']
+# This address points to Image import descriptor (winnt.h, 17643)
+# This structure contains:
+# union {
+#     DWORD   Characteristics;            // 0 for terminating null import descriptor
+#     DWORD   OriginalFirstThunk;         // RVA to original unbound IAT (PIMAGE_THUNK_DATA)
+# } DUMMYUNIONNAME;
+# DWORD   TimeDateStamp;                  // 0 if not bound,
+#                                         // -1 if bound, and real date\time stamp
+#                                         //     in IMAGE_DIRECTORY_ENTRY_BOUND_IMPORT (new BIND)
+#                                         // O.W. date/time stamp of DLL bound to (Old BIND)
+# DWORD   ForwarderChain;                 // -1 if no forwarders
+# DWORD   Name;
+# DWORD   FirstThunk;                     // RVA to IAT (if bound this IAT has actual addresses)
+dll_file.seek(import_table_real_address, 0)
+image_import_descriptors = []
+while True:
+    image_import_descriptor = dict()
+    image_import_descriptor['Characteristics'] = int(dll_file.read(4)[::-1].hex(), 16)
+    image_import_descriptor['TimeDateStamp'] = int(dll_file.read(4)[::-1].hex(), 16)
+    image_import_descriptor['ForwarderChain'] = int(dll_file.read(4)[::-1].hex(), 16)
+    image_import_descriptor['Name'] = int(dll_file.read(4)[::-1].hex(), 16)
+    image_import_descriptor['FirstThunk'] = int(dll_file.read(4)[::-1].hex(), 16)
+    if image_import_descriptor['Characteristics'] == 0:
+        break
+    image_import_descriptors.append(image_import_descriptor)
+
+# Get image import descriptor names
+for descriptor in image_import_descriptors:
+    descriptor_name_address = descriptor['Name'] - import_table_section['VirtualAddress'] + \
+        import_table_section['PointerToRawData']
+    dll_file.seek(descriptor_name_address, 0)
+    name = dll_file.read(100)  # I hope that 100 symbols is enough for dll name
+    descriptor['RealName'] = name.decode('ANSI')[:name.decode('ANSI').find('\x00')]
+
+# Print dll dependencies
+for descriptor in image_import_descriptors:
+    print(descriptor['RealName'])
