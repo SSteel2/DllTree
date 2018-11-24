@@ -1,6 +1,3 @@
-# Major notes for this:
-# https://upload.wikimedia.org/wikipedia/commons/1/1b/Portable_Executable_32_bit_Structure_in_SVG_fixed.svg
-# https://docs.microsoft.com/en-us/windows/desktop/debug/pe-format
 import time
 
 dll_file = open("Test/SQLite2.dll", "rb")
@@ -25,7 +22,7 @@ machine = int(machine.hex(), 16)
 if machine == 0x6486:
     print("64-bit executable")
 
-# Red number of sections
+# Read number of sections
 number_sections = dll_file.read(2)
 number_sections = int(number_sections[::-1].hex(), 16)
 
